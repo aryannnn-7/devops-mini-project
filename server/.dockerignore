@@ -1,0 +1,21 @@
+```
+
+### 5. **server/.dockerignore**
+```
+node_modules
+npm-debug.log
+.git
+.env
+.DS_Store
+coverage
+*.log
+bin
+cmd
+dev
+etc
+mingw64
+tmp
+usr
+client.zip
+unins000.dat
+unins000.msg
