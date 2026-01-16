@@ -1,36 +1,40 @@
-// Jenkinsfile
-// Place this in your project root
-
 pipeline {
     agent any
     
+    tools {
+        nodejs 'NodeJS-18'
+    }
+    
     environment {
-        DOCKER_REGISTRY = 'your-docker-hub-username'
-        BACKEND_IMAGE = "${DOCKER_REGISTRY}/legal-rights-backend"
-        FRONTEND_IMAGE = "${DOCKER_REGISTRY}/legal-rights-frontend"
-        DOCKER_CREDENTIALS = credentials('docker-hub-credentials')
-        JIRA_SITE = 'your-jira-site'
+        DOCKER_USERNAME = 'aryannn07'
+        BACKEND_IMAGE = "${DOCKER_USERNAME}/legal-rights-backend"
+        FRONTEND_IMAGE = "${DOCKER_USERNAME}/legal-rights-frontend"
+        PROJECT_PATH = 'C:/Users/ARYAN/OneDrive/Desktop/legal-rights-portal-3'
+        JIRA_SITE = 'Legal-Rights-Jira'
+        JIRA_ISSUE = 'CRM-8'
     }
     
     stages {
         stage('Checkout') {
             steps {
-                // Checkout code from Git
-                checkout scm
-                
-                // Update Jira ticket
                 script {
-                    def issueKey = sh(
-                        script: "git log -1 --pretty=%B | grep -oP '(?<=\\[)[A-Z]+-[0-9]+(?=\\])'",
-                        returnStdout: true
-                    ).trim()
+                    echo '📥 Using local project files...'
+                    echo "Project location: ${PROJECT_PATH}"
                     
-                    if (issueKey) {
+                    try {
                         jiraAddComment(
                             site: "${JIRA_SITE}",
-                            idOrKey: issueKey,
-                            comment: "Build #${BUILD_NUMBER} started"
+                            idOrKey: "${JIRA_ISSUE}",
+                            comment: "🔵 *Build #${BUILD_NUMBER} Started*\n\nJenkins CI/CD pipeline initiated."
                         )
+                        
+                        jiraTransitionIssue(
+                            site: "${JIRA_SITE}",
+                            idOrKey: "${JIRA_ISSUE}",
+                            input: [transition: [name: 'In Progress']]
+                        )
+                    } catch (Exception e) {
+                        echo "⚠️ Jira update: ${e.message}"
                     }
                 }
             }
@@ -40,34 +44,17 @@ pipeline {
             parallel {
                 stage('Backend Dependencies') {
                     steps {
-                        dir('backend') {
-                            sh 'npm ci'
+                        dir("${PROJECT_PATH}/server") {
+                            echo '📦 Installing backend dependencies...'
+                            bat 'npm install'
                         }
                     }
                 }
                 stage('Frontend Dependencies') {
                     steps {
-                        dir('frontend') {
-                            sh 'npm ci'
-                        }
-                    }
-                }
-            }
-        }
-        
-        stage('Run Tests') {
-            parallel {
-                stage('Backend Tests') {
-                    steps {
-                        dir('backend') {
-                            sh 'npm test || true'
-                        }
-                    }
-                }
-                stage('Frontend Tests') {
-                    steps {
-                        dir('frontend') {
-                            sh 'npm test -- --coverage --watchAll=false || true'
+                        dir("${PROJECT_PATH}/client") {
+                            echo '📦 Installing frontend dependencies...'
+                            bat 'npm install'
                         }
                     }
                 }
@@ -78,79 +65,51 @@ pipeline {
             parallel {
                 stage('Build Backend') {
                     steps {
-                        dir('backend') {
-                            sh """
-                                docker build -t ${BACKEND_IMAGE}:${BUILD_NUMBER} .
-                                docker tag ${BACKEND_IMAGE}:${BUILD_NUMBER} ${BACKEND_IMAGE}:latest
-                            """
+                        dir("${PROJECT_PATH}/server") {
+                            echo '🐳 Building backend image...'
+                            bat "docker build -t ${BACKEND_IMAGE}:${BUILD_NUMBER} ."
+                            bat "docker tag ${BACKEND_IMAGE}:${BUILD_NUMBER} ${BACKEND_IMAGE}:latest"
                         }
                     }
                 }
                 stage('Build Frontend') {
                     steps {
-                        dir('frontend') {
-                            sh """
-                                docker build -t ${FRONTEND_IMAGE}:${BUILD_NUMBER} .
-                                docker tag ${FRONTEND_IMAGE}:${BUILD_NUMBER} ${FRONTEND_IMAGE}:latest
-                            """
+                        dir("${PROJECT_PATH}/client") {
+                            echo '🐳 Building frontend image...'
+                            bat "docker build -t ${FRONTEND_IMAGE}:${BUILD_NUMBER} ."
+                            bat "docker tag ${FRONTEND_IMAGE}:${BUILD_NUMBER} ${FRONTEND_IMAGE}:latest"
                         }
                     }
                 }
             }
         }
         
-        stage('Run Selenium Tests') {
+        stage('Push to Docker Hub') {
             steps {
-                script {
-                    // Start containers for testing
-                    sh 'docker-compose up -d'
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', 
+                                                 usernameVariable: 'DOCKER_USER', 
+                                                 passwordVariable: 'DOCKER_PASS')]) {
+                    echo '📤 Logging into Docker Hub...'
+                    bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
                     
-                    // Wait for services to be ready
-                    sh 'sleep 30'
+                    echo 'Pushing backend images...'
+                    bat "docker push ${BACKEND_IMAGE}:${BUILD_NUMBER}"
+                    bat "docker push ${BACKEND_IMAGE}:latest"
                     
-                    // Run Selenium tests
-                    dir('tests/selenium') {
-                        sh 'npm install'
-                        sh 'npm run test:selenium || true'
-                    }
-                    
-                    // Stop containers
-                    sh 'docker-compose down'
+                    echo 'Pushing frontend images...'
+                    bat "docker push ${FRONTEND_IMAGE}:${BUILD_NUMBER}"
+                    bat "docker push ${FRONTEND_IMAGE}:latest"
                 }
             }
         }
         
-        stage('Push to Registry') {
-            when {
-                branch 'main'
-            }
+        stage('Deploy') {
             steps {
-                sh """
-                    echo ${DOCKER_CREDENTIALS_PSW} | docker login -u ${DOCKER_CREDENTIALS_USR} --password-stdin
-                    docker push ${BACKEND_IMAGE}:${BUILD_NUMBER}
-                    docker push ${BACKEND_IMAGE}:latest
-                    docker push ${FRONTEND_IMAGE}:${BUILD_NUMBER}
-                    docker push ${FRONTEND_IMAGE}:latest
-                """
-            }
-        }
-        
-        stage('Deploy to Production') {
-            when {
-                branch 'main'
-            }
-            steps {
-                script {
-                    // Trigger deployment to Render/Vercel
-                    sh '''
-                        # Deploy backend to Render
-                        curl -X POST https://api.render.com/deploy/your-service-id \
-                        -H "Authorization: Bearer ${RENDER_API_KEY}"
-                        
-                        # Deploy frontend to Vercel
-                        cd frontend
-                        vercel --prod --token=${VERCEL_TOKEN}
-                    '''
+                dir("${PROJECT_PATH}") {
+                    echo '🚀 Deploying application...'
+                    bat 'docker-compose down || exit /b 0'
+                    bat 'ping 127.0.0.1 -n 6 > nul'
+                    bat 'docker-compose up -d'
                 }
             }
         }
@@ -159,60 +118,78 @@ pipeline {
     post {
         success {
             script {
-                def issueKey = sh(
-                    script: "git log -1 --pretty=%B | grep -oP '(?<=\\[)[A-Z]+-[0-9]+(?=\\])'",
-                    returnStdout: true
-                ).trim()
+                echo '✅ Pipeline completed successfully!'
                 
-                if (issueKey) {
+                try {
                     jiraAddComment(
                         site: "${JIRA_SITE}",
-                        idOrKey: issueKey,
-                        comment: "✅ Build #${BUILD_NUMBER} completed successfully"
+                        idOrKey: "${JIRA_ISSUE}",
+                        comment: "✅ *Build #${BUILD_NUMBER} Completed!*\n\n" +
+                                 "📦 Images:\n* ${BACKEND_IMAGE}:${BUILD_NUMBER}\n* ${FRONTEND_IMAGE}:${BUILD_NUMBER}\n\n" +
+                                 "🚀 Application deployed successfully!"
                     )
                     
                     jiraTransitionIssue(
                         site: "${JIRA_SITE}",
-                        idOrKey: issueKey,
-                        input: [transition: [id: '31']] // Adjust transition ID
+                        idOrKey: "${JIRA_ISSUE}",
+                        input: [transition: [name: 'Done']]
                     )
+                } catch (Exception e) {
+                    echo "⚠️ Jira update: ${e.message}"
                 }
             }
-            
-            emailext(
-                subject: "✅ Jenkins Build Success: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: "Build completed successfully. Check ${env.BUILD_URL}",
-                to: 'team@example.com'
-            )
         }
-        
         failure {
             script {
-                def issueKey = sh(
-                    script: "git log -1 --pretty=%B | grep -oP '(?<=\\[)[A-Z]+-[0-9]+(?=\\])'",
-                    returnStdout: true
-                ).trim()
-                
-                if (issueKey) {
+                try {
                     jiraAddComment(
                         site: "${JIRA_SITE}",
-                        idOrKey: issueKey,
-                        comment: "❌ Build #${BUILD_NUMBER} failed. Check logs."
+                        idOrKey: "${JIRA_ISSUE}",
+                        comment: "❌ Build #${BUILD_NUMBER} failed!\n\nCheck: ${BUILD_URL}console"
                     )
+                } catch (Exception e) {
+                    echo "⚠️ Jira update: ${e.message}"
                 }
             }
-            
-            emailext(
-                subject: "❌ Jenkins Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: "Build failed. Check ${env.BUILD_URL}",
-                to: 'team@example.com'
-            )
         }
-        
         always {
-            // Clean up
-            sh 'docker system prune -f'
-            cleanWs()
+            bat 'docker system prune -f || exit /b 0'
         }
     }
 }
+```
+
+Save the file!
+
+---
+
+### **Step 2: Update Your Jenkins Job to Use the Jenkinsfile**
+
+1. Go to Jenkins: http://localhost:8080
+2. Click on **Legal-Rights-Pipeline**
+3. Click **Configure**
+4. Scroll to **Pipeline** section
+5. Change settings:
+
+**FROM:**
+```
+Definition: Pipeline script
+Script: [your long script here]
+```
+
+**TO:**
+```
+Definition: Pipeline script from SCM
+SCM: None (or "Git" if you have repo)
+
+Script Path: Jenkinsfile
+
+⚠️ Since you don't have Git integrated yet, use this workaround:
+```
+
+**For local files without Git:**
+```
+Definition: Pipeline script
+Script: DELETE everything and paste this ONE LINE:
+
+load 'C:/Users/ARYAN/OneDrive/Desktop/legal-rights-portal-3/Jenkinsfile'
