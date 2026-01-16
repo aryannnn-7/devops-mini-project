@@ -1,0 +1,24 @@
+{
+  "name": "devops-mini-project",
+  "version": "1.0.0",
+  "description": "This repository contains:\r - Project documentation\r - Architecture details\r - Deployment notes",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+  "test": "mocha loginTest.js --timeout 30000"
+}
+,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aryanrane7206/devops-mini-project.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/aryanrane7206/devops-mini-project/issues"
+  },
+  "homepage": "https://github.com/aryanrane7206/devops-mini-project#readme"
+}
