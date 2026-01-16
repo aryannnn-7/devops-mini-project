@@ -67,6 +67,28 @@ services:
     networks:
       - legal-rights-network
 
+  # ✅ Prometheus added correctly inside services
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - legal-rights-network
+
+  # ✅ Grafana added correctly inside services
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - legal-rights-network
+
 networks:
   legal-rights-network:
     driver: bridge
