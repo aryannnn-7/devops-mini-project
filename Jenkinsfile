@@ -184,12 +184,6 @@ SCM: None (or "Git" if you have repo)
 
 Script Path: Jenkinsfile
 
-⚠️ Since you don't have Git integrated yet, use this workaround:
-```
 
-**For local files without Git:**
-```
-Definition: Pipeline script
-Script: DELETE everything and paste this ONE LINE:
 
 load 'C:/Users/ARYAN/OneDrive/Desktop/legal-rights-portal-3/Jenkinsfile'

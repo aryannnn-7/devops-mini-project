@@ -56,10 +56,12 @@ function Quiz({ title, apiEndpoint, onBack }) {
       </div>
 
       {quizzes.map((quiz, index) => (
-        <div key={quiz._id} className="quiz-card">
-          <p><strong>Q{index + 1}:</strong> {quiz.question}</p>
+        <div key={quiz._id} className="question-card">
+          <p className="question-text quiz-question">
+            <strong>Q{index + 1}:</strong> {quiz.question}
+          </p>
           {quiz.options.map((opt, i) => (
-            <label key={i} style={{ display: "block" }}>
+            <label key={i} className="option-label quiz-option" style={{ display: "block" }}>
               <input
                 type="radio"
                 name={quiz._id}
@@ -73,7 +75,6 @@ function Quiz({ title, apiEndpoint, onBack }) {
         </div>
       ))}
 
-      {/* ✅ Only Submit is shown before submission */}
       <button onClick={handleSubmit}>Submit Quiz</button>
     </div>
   );

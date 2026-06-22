@@ -12,7 +12,12 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build the app
+# ✅ CRITICAL FIX: Set API URL for production build
+# Default to localhost:5000 (works when accessed from browser)
+ARG REACT_APP_API_URL=http://localhost:5000
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+
+# Build the app with the environment variable
 RUN npm run build
 
 # Production stage
